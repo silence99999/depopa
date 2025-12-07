@@ -76,3 +76,119 @@ func (app *application) showItemHandler(w http.ResponseWriter, r *http.Request) 
 		app.serverErrorResponse(w, r, err)
 	}
 }
+
+func (app *application) showItemsHandler(w http.ResponseWriter, r *http.Request) {
+
+	items, err := app.models.Items.GetAll()
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"items": items}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) deleteItemHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+	}
+
+	err = app.models.Items.Delete(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"message": "item successfully deleted"}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
+
+func (app *application) updateItemHandler(w http.ResponseWriter, r *http.Request) {
+	id, err := app.readIDParam(r)
+	if err != nil {
+		app.notFoundResponse(w, r)
+	}
+
+	item, err := app.models.Items.Get(id)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	var input struct {
+		Name        *string  `json:"name"`
+		Condition   *string  `json:"condition"`
+		Description *string  `json:"description"`
+		Colors      []string `json:"colors"`
+		Price       *int     `json:"price"`
+		Size        *int     `json:"size"`
+	}
+
+	err = app.readJSON(w, r, &input)
+	if err != nil {
+		app.badRequestResponse(w, r, err)
+		return
+	}
+
+	if input.Name != nil {
+		item.Name = *input.Name
+	}
+
+	if input.Condition != nil {
+		item.Condition = *input.Condition
+	}
+
+	if input.Description != nil {
+		item.Description = *input.Description
+	}
+
+	if input.Colors != nil {
+		item.Colors = input.Colors
+	}
+
+	if input.Price != nil {
+		item.Price = *input.Price
+	}
+
+	if input.Size != nil {
+		item.Size = *input.Size
+	}
+
+	v := validator.New()
+
+	if data.ValidateItem(v, item); !v.Valid() {
+		app.failedValidationResponse(w, r, v.Errors)
+		return
+	}
+
+	err = app.models.Items.Update(item)
+	if err != nil {
+		switch {
+		case errors.Is(err, data.ErrRecordNotFound):
+			app.notFoundResponse(w, r)
+		default:
+			app.serverErrorResponse(w, r, err)
+		}
+		return
+	}
+
+	err = app.writeJSON(w, http.StatusOK, envelope{"item": item}, nil)
+	if err != nil {
+		app.serverErrorResponse(w, r, err)
+	}
+}
